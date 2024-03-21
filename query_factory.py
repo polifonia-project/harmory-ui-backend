@@ -5,27 +5,21 @@ NUM_NODES = 5
 
 # A search for tunes containing a given pattern.
 def get_pattern_search_query(pattern):
-    sparql_query = """PREFIX jams:<http://w3id.org/polifonia/ontology/jams/>
-                        PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
-                        PREFIX core:<http://w3id.org/polifonia/ontology/core/>
-                        PREFIX xyz:<http://sparql.xyz/facade-x/data/>
-                        PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        SELECT DISTINCT ?title ?tuneType ?key ?signature ?id
+    sparql_query = """PREFIX har: <http://w3id.org/polifonia/harmory/>
+                        PREFIX mf:  <http://w3id.org/polifonia/musical-features/>
+                        PREFIX core:  <http://w3id.org/polifonia/core/>
+                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                        SELECT ?title ?genre ?artist ?id
                         WHERE
                         {
-	                        ?obs jams:ofPattern ?patternURI.
-	                        ?patternURI xyz:pattern_content \"""" + pattern + """\".
-                            ?annotation jams:includesObservation ?obs.
-                            ?annotation jams:isJAMSAnnotationOf ?tune.
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune core:id ?id.
-                            OPTIONAL {?tune core:title ?title}
-                            OPTIONAL {?tune mm:hasFormType ?tuneTypeURI.
-                               ?tuneTypeURI core:name ?tuneType.}
-                            OPTIONAL {?tune mm:hasKey ?keyURI.
-                               ?keyURI mm:tuneKeyName ?key.}
-                            OPTIONAL {?tune jams:timeSignature ?signatureURI.
-                               ?signatureURI mm:timesig ?signature.}
+                            ?segment har:hasSegmentPattern ?pattern.
+                            ?pattern rdfs:label \"""" + pattern + """\".
+                            ?segment har:belongsToMusicalWork ?tune .
+                            ?tune rdf:type core:MusicalWork.
+                            OPTIONAL {?tune core:hasTitle ?title}
+                            BIND(STRAFTER(STR(?tune), "http://w3id.org/polifonia/harmory/") AS ?id).
+                            OPTIONAL {?tune core:hasGenre ?genre.}
+                            OPTIONAL {?tune core:hasArtist ?artist.}
                         } ORDER BY ?title ?id"""
     return sparql_query
 
@@ -87,22 +81,19 @@ def get_patterns_in_common_between_two_tunes(id, prev, excludeTrivialPatterns):
 
 
 # A fuzzy search of tune titles.
+# H
 def get_tune_given_name(matched_ids):
-    sparql_query =   """PREFIX jams:<http://w3id.org/polifonia/ontology/jams/>
-                        PREFIX mm: <http://w3id.org/polifonia/ontology/music-meta/>
-                        PREFIX core:  <http://w3id.org/polifonia/ontology/core/>
-                        PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        SELECT ?title ?tuneType ?key ?signature ?id
+    sparql_query =   """PREFIX har: <http://w3id.org/polifonia/harmory/>
+                        PREFIX mf:  <http://w3id.org/polifonia/musical-features/>
+                        PREFIX core:  <http://w3id.org/polifonia/core/>
+                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                        SELECT ?title ?genre ?artist ?id
                         {
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune core:title ?title.
-                            ?tune core:id ?id.
-                            OPTIONAL {?tune mm:hasFormType ?tuneTypeURI.
-                               ?tuneTypeURI core:name ?tuneType.}
-                            OPTIONAL {?tune mm:hasKey ?keyURI.
-                               ?keyURI mm:tuneKeyName ?key.}
-                            OPTIONAL {?tune jams:timeSignature ?signatureURI.
-                               ?signatureURI mm:timesig ?signature.}
+                            ?tune rdf:type core:MusicalWork.
+                            ?tune core:hasTitle ?title.
+                            BIND(STRAFTER(STR(?s), "http://w3id.org/polifonia/harmory/") AS ?id).
+                            OPTIONAL {?tune core:hasGenre ?genre.}
+                            OPTIONAL {?tune core:hasArtist ?artist.}
                             VALUES (?title ?match_strength ?id) { ( \""""
     sparql_query += """\" ) ( \"""".join(['\" \"'.join(map(str,tup)) for tup in matched_ids])
     sparql_query += """\" ) }\n} ORDER BY DESC(xsd:integer(?match_strength)) ?title ?id"""
@@ -188,15 +179,17 @@ def advanced_search(query_params, matched_ids):
 
 
 # Return a list of all tune names for use by the fuzzy search algorithm.
+# H
 def get_all_tune_names():
-    sparql_query =   """PREFIX core:<http://w3id.org/polifonia/ontology/core/>
-                        PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
+    sparql_query =   """PREFIX har: <http://w3id.org/polifonia/harmory/>
+                        PREFIX mf:  <http://w3id.org/polifonia/musical-features/>
+                        PREFIX core:  <http://w3id.org/polifonia/core/>
+                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
                         SELECT DISTINCT ?title ?id
                         {
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune core:title ?title.
-                            ?tune core:id ?id.
+                            ?tune rdf:type core:MusicalWork.
+                            ?tune core:hasTitle ?title.
+                            BIND(STRAFTER(STR(?tune), "http://w3id.org/polifonia/harmory/") AS ?id).
                         }
                      """
     return sparql_query
@@ -376,15 +369,14 @@ def get_time_sig_list():
 
 # Return a list of all tune type values to populate the advanced search drop-down.
 def get_tune_type_list():
-    sparql_query =   """PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
-                        PREFIX core:<http://w3id.org/polifonia/ontology/core/>
-                        SELECT DISTINCT ?tuneType
+    sparql_query =   """PREFIX core:  <http://w3id.org/polifonia/core/>
+                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                        SELECT DISTINCT ?genre
                         WHERE
                         {
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune mm:hasFormType ?tuneTypeURI.
-                            ?tuneTypeURI core:name ?tuneType.
-                        } ORDER BY ?tuneType"""
+                            ?tune rdf:type core:MusicalWork.
+							?tune core:hasGenre ?genre.
+                        } ORDER BY ?genre"""
     return sparql_query
 
 

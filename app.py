@@ -15,9 +15,9 @@ from fuzzy_search import FuzzySearch
 app = Flask(__name__)
 CORS(app)
 
-BLAZEGRAPH_URL = 'https://polifonia.disi.unibo.it/fonn/sparql'
+BLAZEGRAPH_URL = 'https://polifonia.disi.unibo.it/harmory/sparql'
 
-EMPTY_SEARCH_RESPONSE = {"head":{"vars":["tune_name", "tuneType", "key", "signature", "id"]},"results":{"bindings":[]}}
+EMPTY_SEARCH_RESPONSE = {"head":{"vars":["tune_name", "genre", "artist", "id"]},"results":{"bindings":[]}}
 fuzzy_search = FuzzySearch(BLAZEGRAPH_URL)
 
 
@@ -169,7 +169,7 @@ def getTuneTypeList():
     if response.status_code != 200:
         return jsonify({'error': 'Failed to execute SPARQL query'}), 500
     tuneTypeJSON = response.json()
-    tune_type_list = [item['tuneType']['value'] for item in
+    tune_type_list = [item['genre']['value'] for item in
                  tuneTypeJSON['results']['bindings']]
     #print(tune_type_list)
     # Return the JSON data
