@@ -26,27 +26,15 @@ def get_pattern_search_query(pattern):
 
 # Return a list of the most frequent patterns in a tune.
 def get_most_common_patterns_for_a_tune(id, excludeTrivialPatterns):
-    sparql_query = """PREFIX jams:<http://w3id.org/polifonia/ontology/jams/>
-                        PREFIX core:<http://w3id.org/polifonia/ontology/core/>
-                        PREFIX xyz:<http://sparql.xyz/facade-x/data/>
-                        PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
+    sparql_query = """PREFIX har: <http://w3id.org/polifonia/harmory/>
 
-                        SELECT ?pattern (count(?pattern) as ?patternFreq)
-                        WHERE {
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune core:id \"""" + id + """\".
-                            ?annotation jams:isJAMSAnnotationOf ?tune.
-                            ?annotation jams:includesObservation ?observation.
-                            ?observation jams:ofPattern ?patternURI.
-                        """
-    if excludeTrivialPatterns == "true":
-        sparql_query += """ ?patternURI xyz:pattern_complexity ?comp.
-                            FILTER (?comp > "0.4"^^xsd:float).
-                        """
-    sparql_query += """     ?patternURI xyz:pattern_content ?pattern.
-                        } group by ?pattern
-                        ORDER BY DESC (?patternFreq) ?pattern LIMIT 18"""
+                    SELECT ?pattern (count(?pattern) as ?patternFreq)
+                    WHERE {
+                      BIND(IRI(CONCAT("http://w3id.org/polifonia/harmory/", \"""" + id + """\")) AS ?tune)
+                      ?segment har:belongsToMusicalWork ?tune .
+                      ?segment har:hasSegmentPattern ?pattern.
+                    } GROUP BY ?pattern
+                    ORDER BY DESC (?patternFreq) ?pattern LIMIT 18"""
     return sparql_query
 
 
@@ -198,72 +186,54 @@ def get_all_tune_names():
 # Get the pattern node data for the tune-pattern network visualisation.
 def get_neighbour_patterns_by_tune(id, click_num, excludeTrivialPatterns):
     offset = NUM_NODES*int(click_num)
-    sparql_query =   """PREFIX jams:<http://w3id.org/polifonia/ontology/jams/>
-                        PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
-                        PREFIX core:<http://w3id.org/polifonia/ontology/core/>
-                        PREFIX xyz:<http://sparql.xyz/facade-x/data/>
-                        PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        SELECT ?pattern
-                        {
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune core:id \"""" + id + """\".
-                            ?annotation jams:isJAMSAnnotationOf ?tune.
-                            ?annotation jams:includesObservation ?observation .
-                            ?observation jams:ofPattern ?patternURI .
-                            ?patternURI xyz:pattern_complexity ?comp.
-                        """
-    if excludeTrivialPatterns == "true":
-        sparql_query += """FILTER (?comp > "0.4"^^xsd:float) .
-                        """
-    sparql_query +=     """?patternURI xyz:pattern_content ?pattern.
-                        } group by ?pattern ORDER BY DESC(?comp*COUNT(?pattern)) DESC(?comp) DESC(COUNT(?pattern))
-                        OFFSET """ + str(offset) + """ LIMIT """ + str(NUM_NODES)
+    sparql_query =   """PREFIX har: <http://w3id.org/polifonia/harmory/>
+
+                    SELECT ?pattern
+                    WHERE {
+                      BIND(IRI(CONCAT("http://w3id.org/polifonia/harmory/", \"""" + id + """\")) AS ?tune)
+                      ?segment har:belongsToMusicalWork ?tune .
+                      ?segment har:hasSegmentPattern ?pattern.
+                    } GROUP BY ?pattern
+                     ORDER BY DESC(COUNT(?pattern)) ?pattern
+                     OFFSET """ + str(offset) + """ LIMIT """ + str(NUM_NODES)
     return sparql_query
 
 
 # Get the tune node data for the tune-pattern network visualisation.
 def get_neighbour_tunes_by_pattern(pattern, click_num):
     offset = NUM_NODES*int(click_num)
-    sparql_query =       """PREFIX jams:<http://w3id.org/polifonia/ontology/jams/>
-                            PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
-                            PREFIX core:  <http://w3id.org/polifonia/ontology/core/>
-                            PREFIX xyz:<http://sparql.xyz/facade-x/data/>
-                            PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                            PREFIX tunes:<http://w3id.org/polifonia/ontology/tunes/>
-                            SELECT ?title ?id ?family
-                            WHERE
-                            {
-                                ?patternURI xyz:pattern_content ?pattern.
-                                VALUES ?pattern { \"""" + pattern + """\" }
-                                ?obs jams:ofPattern ?patternURI.
-                                ?annotation jams:includesObservation ?obs.
-                                ?annotation jams:isJAMSAnnotationOf ?tune.
-                                ?tune rdf:type mm:MusicEntity.
-                                ?tune core:id ?id.
-                                ?tune core:isMemberOf ?tuneFamilyURI.
-                                ?tuneFamilyURI rdf:type tunes:TuneFamily.
-                                ?tuneFamilyURI mm:tuneFamilyName ?family.
-                                OPTIONAL {?tune core:title ?title}
-                            } GROUP BY ?id ?title ?family ORDER BY DESC(COUNT(?pattern)) ?title ?id
-                            OFFSET """ + str(offset) + """ LIMIT """ + str(NUM_NODES)
+    sparql_query =       """PREFIX har: <http://w3id.org/polifonia/harmory/>
+                        PREFIX mf:  <http://w3id.org/polifonia/musical-features/>
+                        PREFIX core:  <http://w3id.org/polifonia/core/>
+                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                        SELECT ?title ?id ?genre
+                        WHERE
+                        {
+                            ?segment har:hasSegmentPattern ?pattern.
+                            ?pattern rdfs:label \"""" + pattern + """\".
+                            ?segment har:belongsToMusicalWork ?tune .
+                            ?tune rdf:type core:MusicalWork.
+                            OPTIONAL {?tune core:hasTitle ?title}
+                            BIND(STRAFTER(STR(?tune), "http://w3id.org/polifonia/harmory/") AS ?id).
+                            OPTIONAL {?tune core:hasGenre ?genre.}
+                        }  GROUP BY ?id ?title ?genre ORDER BY DESC(COUNT(?pattern)) ?title ?id
+                        OFFSET """ + str(offset) + """ LIMIT """ + str(NUM_NODES)
     return sparql_query
 
 
 # Get tune data when composition page loads.
 def get_tune_data(id):
-    sparql_query =   """PREFIX mm:<http://w3id.org/polifonia/ontology/music-meta/>
-                        PREFIX core:<http://w3id.org/polifonia/ontology/core/>
-                        PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        PREFIX tunes:<http://w3id.org/polifonia/ontology/tunes/>
-                        SELECT ?title ?tuneFamily ?link
+    sparql_query =   """PREFIX har: <http://w3id.org/polifonia/harmory/>
+                        PREFIX mf:  <http://w3id.org/polifonia/musical-features/>
+                        PREFIX core:  <http://w3id.org/polifonia/core/>
+                        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                        SELECT ?title ?genre ?artist
                         WHERE {
-                            ?tune rdf:type mm:MusicEntity.
-                            ?tune core:id \"""" + id + """\".
-                            ?tune core:title ?title.
-                            OPTIONAL{?tune core:isMemberOf ?tuneFamilyURI.
-                            ?tuneFamilyURI rdf:type tunes:TuneFamily.
-                            ?tuneFamilyURI mm:tuneFamilyName ?tuneFamily.}
-                            OPTIONAL{?tune core:description ?link.}
+                            ?tune rdf:type core:MusicalWork.
+                            BIND(IRI(CONCAT("http://w3id.org/polifonia/harmory/", \"""" + id + """\")) AS ?tune)
+                            ?tune core:hasTitle ?title.
+                            OPTIONAL {?tune core:hasGenre ?genre.}
+                            OPTIONAL {?tune core:hasArtist ?artist.}
                         }"""
     return sparql_query
 

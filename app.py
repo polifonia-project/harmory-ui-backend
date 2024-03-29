@@ -192,6 +192,8 @@ def getPatterns():
         }
     )
 
+    #print(sparql_query)
+    #print(response.text)
     # Check the response status
     if response.status_code != 200:
         return jsonify({'error': 'Failed to execute SPARQL query'}), 500
